@@ -1,9 +1,14 @@
-use axum::response::Response;
+use axum::{
+    body::Body,
+    http::Request,
+    response::Response,
+};
 use dotenv::dotenv;
 use rust_queue::state::AppState;
 use rust_queue::{models::user::UserRole, repository::WriteRepository};
 use serde_json::Value;
 use sqlx::{Executor, PgPool};
+use tower::ServiceExt;
 use uuid::Uuid;
 
 pub struct TestApp {
@@ -136,4 +141,48 @@ pub async fn get_auth_token(state: &AppState, user_id: Uuid, email: &str) -> Str
         .jwt_service
         .generate_access_token(user_id, email)
         .expect("Failed to generate token")
+}
+
+/// Helper to create a test user and return (user_id, auth_token).
+/// Saves boilerplate in tests that just need an authenticated user.
+pub async fn create_authenticated_user(state: &AppState) -> (Uuid, String) {
+    let user_id = create_test_user(state, "testuser@example.com", "password123", UserRole::User).await;
+    let token = get_auth_token(state, user_id, "testuser@example.com").await;
+    (user_id, token)
+}
+
+/// Helper to make an authenticated request and return the response.
+pub async fn auth_request(
+    state: &AppState,
+    token: &str,
+    method: &str,
+    uri: &str,
+    body: Option<serde_json::Value>,
+) -> Response {
+    let router = rust_queue::build_router(state.clone());
+
+    let mut builder = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("Authorization", format!("Bearer {}", token));
+
+    let body = if let Some(json_body) = body {
+        builder = builder.header("Content-Type", "application/json");
+        Body::from(serde_json::to_string(&json_body).unwrap())
+    } else {
+        Body::empty()
+    };
+
+    router
+        .oneshot(builder.body(body).unwrap())
+        .await
+        .unwrap()
+}
+
+/// Helper to extract JSON body from a response.
+pub async fn response_json(response: Response) -> Value {
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    serde_json::from_slice(&body).unwrap()
 }
