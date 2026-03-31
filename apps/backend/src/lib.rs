@@ -10,6 +10,7 @@ pub mod repository;
 pub mod services;
 pub mod state;
 pub mod validation;
+pub mod worker;
 use axum::{Router, http};
 use dotenv::dotenv;
 use envy::from_env;
