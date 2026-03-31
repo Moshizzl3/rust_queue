@@ -63,9 +63,12 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api/health", api::health::routes())
         .nest("/api/auth", api::auth::routes());
 
-    let protected_routes = Router::new().nest("/api/users", api::user::routes()).layer(
-        axum::middleware::from_fn_with_state(state.clone(), middleware::auth_middleware),
-    );
+    let protected_routes = Router::new()
+        .nest("/api/users", api::user::routes())
+        .nest("/api/jobs", api::job::routes())
+        .layer(
+            axum::middleware::from_fn_with_state(state.clone(), middleware::auth_middleware),
+        );
 
     Router::new()
         .merge(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()))
