@@ -45,6 +45,12 @@ impl Modify for SecurityAddon {
         api::user::update_user,
         api::user::delete_user,
 
+        // Jobs
+        api::job::create_job,
+        api::job::get_job,
+        api::job::list_jobs,
+        api::job::cancel_job,
+        api::job::get_stats,
     ),
     components(
         schemas(
@@ -61,7 +67,14 @@ impl Modify for SecurityAddon {
             models::user::UserResponse,
             models::user::CreateUserRequest,
             models::user::UpdateUserRequest,
-            
+
+            // Jobs
+            models::job::JobStatus,
+            models::job::CreateJobRequest,
+            models::job::JobResponse,
+            models::job::JobDetailResponse,
+            models::job::JobStats,
+
             // Pagination
             models::pagination::SortOrder,
             models::pagination::PaginationMetadata,
@@ -78,11 +91,12 @@ impl Modify for SecurityAddon {
         (name = "Health",       description = "Health check endpoints"),
         (name = "Auth",         description = "Authentication endpoints"),
         (name = "Users",        description = "User management"),
+        (name = "Jobs",         description = "Job queue management"),
     ),
     info(
-        title = "Rust queue API",
+        title = "Rust Queue API",
         version = "0.1.0",
-        description = "Rust queue -  API for tracking queue."
+        description = "Distributed task queue API with dashboard"
     )
 )]
 pub struct ApiDoc;
