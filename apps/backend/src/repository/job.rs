@@ -268,4 +268,33 @@ impl JobRepository {
             .await
         }
     }
+
+    // ── Reaper methods ─────────────────────────────────────────────────────
+
+    /// Find jobs stuck in 'running' longer than `threshold_secs` and
+    /// reset them to 'pending'. Returns how many jobs were reset.
+    ///
+    /// These are jobs whose worker likely crashed. By resetting them,
+    /// a healthy worker can pick them up on the next poll cycle.
+    /// We also clear `locked_by` and `started_at` since the original
+    /// worker is gone.
+    pub async fn reset_stale_jobs(&self, threshold_secs: i64) -> Result<i64, sqlx::Error> {
+        let result = sqlx::query(
+            r#"
+            UPDATE jobs
+            SET status = 'pending',
+                locked_by = NULL,
+                started_at = NULL,
+                updated_at = NOW(),
+                last_error = COALESCE(last_error, '') || ' [reset by reaper: worker presumed dead]'
+            WHERE status = 'running'
+              AND started_at < NOW() - ($1 || ' seconds')::INTERVAL
+            "#,
+        )
+        .bind(threshold_secs.to_string())
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() as i64)
+    }
 }
