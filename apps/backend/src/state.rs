@@ -1,5 +1,5 @@
 use crate::{
-    repository::UserRepository,
+    repository::{JobRepository, UserRepository},
     services::{JwtService, PasswordService},
 };
 use sqlx::PgPool;
@@ -8,6 +8,7 @@ use sqlx::PgPool;
 pub struct AppState {
     pub pool: PgPool,
     pub users: UserRepository,
+    pub jobs: JobRepository,
     pub password_service: PasswordService,
     pub jwt_service: JwtService,
 }
@@ -26,6 +27,7 @@ impl AppState {
         Ok(Self {
             pool: pool.clone(),
             users: UserRepository::new(pool.clone()),
+            jobs: JobRepository::new(pool.clone()),
             password_service: PasswordService::new(password_pepper.to_string()),
             jwt_service: JwtService::new(jwt_secret, jwt_expiration_mins, refresh_expiry_days),
         })
