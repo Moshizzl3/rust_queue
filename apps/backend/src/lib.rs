@@ -2,6 +2,7 @@
 pub mod macros;
 pub mod api;
 pub mod config;
+pub mod dashboard;
 pub mod error;
 pub mod middleware;
 pub mod models;
@@ -62,7 +63,8 @@ pub fn build_router(state: AppState) -> Router {
 
     let public_routes = Router::new()
         .nest("/api/health", api::health::routes())
-        .nest("/api/auth", api::auth::routes());
+        .nest("/api/auth", api::auth::routes())
+        .nest("/dashboard", dashboard::routes());
 
     let protected_routes = Router::new()
         .nest("/api/users", api::user::routes())
