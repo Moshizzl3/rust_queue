@@ -51,6 +51,7 @@ impl Modify for SecurityAddon {
         api::job::list_jobs,
         api::job::cancel_job,
         api::job::get_stats,
+        api::job::get_metrics,
     ),
     components(
         schemas(
@@ -74,6 +75,9 @@ impl Modify for SecurityAddon {
             models::job::JobResponse,
             models::job::JobDetailResponse,
             models::job::JobStats,
+            models::job::JobMetrics,
+            models::job::Throughput,
+            models::job::JobTypeStats,
 
             // Pagination
             models::pagination::SortOrder,
