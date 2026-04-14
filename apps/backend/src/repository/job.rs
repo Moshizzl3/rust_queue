@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::models::job::{CreateJobRequest, Job, JobStats, JobStatus};
+use crate::models::job::{CreateJobRequest, Job, JobStats, JobStatus, JobTypeStats, Throughput};
 use crate::models::pagination::{PagedData, PaginationParams};
 
 #[derive(Clone)]
@@ -296,5 +296,91 @@ impl JobRepository {
         .await?;
 
         Ok(result.rows_affected() as i64)
+    }
+
+    // ── Metrics methods ───────────────────────────────────────────────────
+
+    /// Average processing duration for completed jobs, in seconds.
+    /// Uses EXTRACT(EPOCH FROM ...) to get a float of seconds.
+    pub async fn avg_duration(&self) -> Result<Option<f64>, sqlx::Error> {
+        let row: (Option<f64>,) = sqlx::query_as(
+            r#"
+            SELECT AVG(EXTRACT(EPOCH FROM (completed_at - started_at)))::FLOAT8
+            FROM jobs
+            WHERE status = 'completed'
+              AND completed_at IS NOT NULL
+              AND started_at IS NOT NULL
+            "#,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(row.0)
+    }
+
+    /// Count of completed jobs in recent time windows.
+    pub async fn throughput(&self) -> Result<Throughput, sqlx::Error> {
+        let row: (i64, i64, i64) = sqlx::query_as(
+            r#"
+            SELECT
+                COALESCE(COUNT(*) FILTER (WHERE completed_at > NOW() - INTERVAL '1 minute'), 0),
+                COALESCE(COUNT(*) FILTER (WHERE completed_at > NOW() - INTERVAL '5 minutes'), 0),
+                COALESCE(COUNT(*) FILTER (WHERE completed_at > NOW() - INTERVAL '1 hour'), 0)
+            FROM jobs
+            WHERE status = 'completed'
+            "#,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(Throughput {
+            last_1m: row.0,
+            last_5m: row.1,
+            last_1h: row.2,
+        })
+    }
+
+    /// Percentage of completed jobs that needed more than one attempt.
+    /// Returns 0.0 if no completed jobs exist.
+    pub async fn retry_rate(&self) -> Result<f64, sqlx::Error> {
+        let row: (i64, i64) = sqlx::query_as(
+            r#"
+            SELECT
+                COUNT(*),
+                COALESCE(COUNT(*) FILTER (WHERE attempt > 1), 0)
+            FROM jobs
+            WHERE status = 'completed'
+            "#,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        let (total, retried) = row;
+        if total == 0 {
+            return Ok(0.0);
+        }
+
+        Ok((retried as f64 / total as f64) * 100.0)
+    }
+
+    /// Per-job-type breakdown: total, completed, dead, avg duration.
+    pub async fn stats_by_type(&self) -> Result<Vec<JobTypeStats>, sqlx::Error> {
+        sqlx::query_as::<_, JobTypeStats>(
+            r#"
+            SELECT
+                job_type,
+                COUNT(*) as total,
+                COALESCE(COUNT(*) FILTER (WHERE status = 'completed'), 0) as completed,
+                COALESCE(COUNT(*) FILTER (WHERE status = 'dead'), 0) as dead,
+                (AVG(EXTRACT(EPOCH FROM (completed_at - started_at)))
+                    FILTER (WHERE status = 'completed' AND completed_at IS NOT NULL AND started_at IS NOT NULL)
+                )::FLOAT8 as avg_duration_secs
+            FROM jobs
+            GROUP BY job_type
+            ORDER BY total DESC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
     }
 }
