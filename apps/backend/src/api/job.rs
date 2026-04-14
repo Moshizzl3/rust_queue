@@ -7,7 +7,7 @@ use axum::{
 use uuid::Uuid;
 
 use crate::error::AppError;
-use crate::models::job::{CreateJobRequest, JobDetailResponse, JobResponse, JobStats, JobStatus};
+use crate::models::job::{CreateJobRequest, JobDetailResponse, JobMetrics, JobResponse, JobStats, JobStatus};
 use crate::models::pagination::{PaginatedResponse, PaginationParams};
 use crate::models::responses::{DataResponse, EmptyResponse};
 use crate::state::AppState;
@@ -17,6 +17,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", post(create_job).get(list_jobs))
         .route("/stats", get(get_stats))
+        .route("/metrics", get(get_metrics))
         .route("/{id}", get(get_job))
         .route("/{id}/cancel", post(cancel_job))
 }
@@ -185,4 +186,41 @@ async fn get_stats(
 ) -> Result<impl IntoResponse, AppError> {
     let stats = state.jobs.stats().await?;
     Ok(Json(DataResponse::new(stats)))
+}
+
+// ── Metrics ─────────────────────────────────────────────────────────────────
+//
+// Richer than /stats — includes processing times, throughput, retry rates.
+// We fire all queries concurrently with tokio::try_join! since they're
+// independent. This keeps the endpoint fast even as the data grows.
+
+#[utoipa::path(
+    get,
+    path = "/api/jobs/metrics",
+    responses(
+        (status = 200, description = "Detailed queue metrics", body = DataResponse<JobMetrics>),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "Jobs"
+)]
+async fn get_metrics(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    let (counts, avg_duration, throughput, retry_rate, by_type) = tokio::try_join!(
+        state.jobs.stats(),
+        state.jobs.avg_duration(),
+        state.jobs.throughput(),
+        state.jobs.retry_rate(),
+        state.jobs.stats_by_type(),
+    )?;
+
+    let metrics = JobMetrics {
+        counts,
+        avg_duration_secs: avg_duration,
+        throughput,
+        retry_rate,
+        by_type,
+    };
+
+    Ok(Json(DataResponse::new(metrics)))
 }
