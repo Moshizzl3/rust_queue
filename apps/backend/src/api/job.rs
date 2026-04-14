@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::error::AppError;
 use crate::models::job::{CreateJobRequest, JobDetailResponse, JobMetrics, JobResponse, JobStats, JobStatus};
 use crate::models::pagination::{PaginatedResponse, PaginationParams};
-use crate::models::responses::{DataResponse, EmptyResponse};
+use crate::models::responses::DataResponse;
 use crate::state::AppState;
 use crate::validation::validate;
 
