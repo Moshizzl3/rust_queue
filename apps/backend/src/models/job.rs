@@ -172,3 +172,38 @@ pub struct JobStats {
     pub dead: i64,
     pub cancelled: i64,
 }
+
+/// Processing metrics — how the queue is performing
+#[derive(Debug, Serialize, ToSchema)]
+pub struct JobMetrics {
+    /// Current counts by status
+    pub counts: JobStats,
+
+    /// Average processing duration in seconds (completed jobs only)
+    pub avg_duration_secs: Option<f64>,
+
+    /// Jobs completed in the last 1 minute, 5 minutes, and 1 hour
+    pub throughput: Throughput,
+
+    /// What percentage of completed jobs needed at least one retry
+    pub retry_rate: f64,
+
+    /// Breakdown of jobs by type
+    pub by_type: Vec<JobTypeStats>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct Throughput {
+    pub last_1m: i64,
+    pub last_5m: i64,
+    pub last_1h: i64,
+}
+
+#[derive(Debug, Serialize, FromRow, ToSchema)]
+pub struct JobTypeStats {
+    pub job_type: String,
+    pub total: i64,
+    pub completed: i64,
+    pub dead: i64,
+    pub avg_duration_secs: Option<f64>,
+}
